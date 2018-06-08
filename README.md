@@ -1,6 +1,6 @@
 # ODIELAK
 
-A small lua lib, that performs char (1 byte char from 0 to 255) to value replacements, like <b>string.gsub</b>, but <b>more</b> faster
+A small lua lib, that performs char (1 byte char from 0 to 255) to value replacements, like <b>string.gsub</b>, but <b>more</b> faster and has some additional features (like functions and a metatable __tostring attr)
 
 ```lua
 	-- with lak

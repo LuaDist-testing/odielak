@@ -8,6 +8,11 @@ local sanityt = {
 	['\''] = '&#x27;',
 	['/'] = '&#x2F;',
 	['A'] = '', -- option (replace A with nothing)
+	['H'] = {}, -- ignore
+	[255] = 'last',
+	['U'] = setmetatable({}, {__tostring = function() end}), -- ignore
+	['B'] = setmetatable({"CC"}, {__tostring = function(self) return self[1]; end}),
+	['F'] = function(self, str, key) print(self, str, key); return '_F_'; end,
 	[256] = 'bad key',
 }
 
@@ -33,7 +38,12 @@ if (lstr ~= gstr or mstr ~= gstr) then
 	error("NOT MATCHED!");
 end
 
+assert(sanity_it(("1234" .. string.char(255):rep(3))) == "1234lastlastlast");
+assert(sanity_it("---BFABB---", 1, nil, false) == "---CC_F_CCCC---");
 assert(sanity_it("  ") == "  ");
-assert(sanity_it(1) == "1");
+assert(sanity_it("  ", 10) == "  ");
+assert(sanity_it(1, 2) == "1");
 assert(sanity_it(nil) == nil);
 assert(sanity_it(true) == nil);
+assert(lak:New({})("012345") == "012345");
+assert(lak:New({[1] = '1'})("012345") == "012345");

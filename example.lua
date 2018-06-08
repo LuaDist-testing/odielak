@@ -2,7 +2,7 @@ local lak = require "odielak";
 
 local escape = lak:New({ -- compile from the given table
 	['&'] = '&amp;',	-- each key (1 byte / an ascii char < 256) will be replaced with the corresponding value
-	['<'] = '&lt;',
+	['<'] = function(self, str, byte) return '&lt;'; end, -- this function will be called only once per FIRST match during the replacement procedure
 	['>'] = '&gt;',
 	['"'] = '&qout;',
 	['\''] = '&#x27;',
@@ -10,6 +10,7 @@ local escape = lak:New({ -- compile from the given table
 	['12'] = 'ignored value',
 	[512] = 'also ignored',
 	[9] = '', -- this will remove tabs (string.byte('\t') == 9)
+	['&'] = setmetatable({'&amp;'}, { __tostring = function(self) return self[1] end}), -- lak:New() will call this __tostring metaattr
 });
 
 -- 'escape' is a table, wich has __call metaattr by default from the 'lak._meta' metatable

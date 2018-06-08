@@ -1,21 +1,21 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "odielak"
-version = "1.0-1"
+version = "1.1-1"
 -- LuaDist source
 source = {
-  tag = "1.0-1",
+  tag = "1.1-1",
   url = "git://github.com/LuaDist-testing/odielak.git"
 }
 -- Original source
 -- source = {
 --  url = "git://github.com/Darvame/odielak",
---  tag = "v1.0",
+--  tag = "v1.1",
 -- }
 description = {
  summary = "A small lua lib, that performs char (1 byte) to value replacements, like string.gsub, but more faster",
  detailed = [[
-	replace all single byte values inside the given string with the new, given values
+	replace all single byte values inside the given string with the new given values
 	aim to work faster than default string.gsub function
 	good to perform string escape (sanitize) operations
 	more info: https://github.com/Darvame/odielak
