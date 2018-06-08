@@ -6,7 +6,7 @@ A small lua lib, that performs char (1 byte char from 0 to 255) to value replace
 	-- with lak
 	local lak = require "odielak";
 
-	local escape = lak:New({
+	local escape = lak.new({
 		['&'] = '&amp;',
 		['<'] = '&lt;',
 		['>'] = '&gt;'

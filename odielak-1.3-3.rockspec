@@ -1,16 +1,16 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "odielak"
-version = "1.2-1"
+version = "1.3-3"
 -- LuaDist source
 source = {
-  tag = "1.2-1",
+  tag = "1.3-3",
   url = "git://github.com/LuaDist-testing/odielak.git"
 }
 -- Original source
 -- source = {
 --  url = "git://github.com/Darvame/odielak",
---  tag = "v1.2",
+--  tag = "v1.3",
 -- }
 description = {
  summary = "A small lua lib, that performs char (1 byte) to value replacements, like string.gsub, but more faster",
