@@ -6,13 +6,18 @@
 #include "string.h"
 #include "limits.h"
 
+#define LAK_VERSION 102
+
 #define LAK_DICT_SIZE (UCHAR_MAX + 1)
-#define LAK_BUF_STACK_SIZE 2048
+#define LAK_BUF_STACK_TOTALSIZE 2048
+
+#define LAK_BUF_OVERSIZE (sizeof(unsigned char *) - sizeof(unsigned char))
+#define LAK_BUF_STACK_SIZE (LAK_BUF_STACK_TOTALSIZE - LAK_BUF_OVERSIZE/sizeof(unsigned char))
 
 #define LAK_DSTRING 0x1
 #define LAK_DFUNCTION 0x2
 
-static int replace_ut_tostring(lua_State *l, int obj)
+static int replace_tostring(lua_State *l, int obj)
 {
 	if (luaL_callmeta(l, obj, "__tostring")) {
 		if (lua_isstring(l, -1)) {
@@ -26,6 +31,17 @@ static int replace_ut_tostring(lua_State *l, int obj)
 	return 0;
 }
 
+static __inline__ const char *tolstring(lua_State *l, int obj, size_t *len)
+{
+	const char *str = lua_tolstring(l, obj, len);
+
+	if (!str && replace_tostring(l, obj)) {
+		return lua_tolstring(l, obj, len);
+	}
+
+	return str;
+}
+
 static int nil_value(lua_State *l)
 {
 	lua_pushnil(l);
@@ -34,7 +50,7 @@ static int nil_value(lua_State *l)
 
 static int error_no_dict(lua_State *l)
 {
-	luaL_typerror(l, 1, "table (with a proper odielak dictionary [-1])");
+	luaL_typerror(l, 1, "table with a proper odielak dictionary [-1]");
 	return 0;
 }
 
@@ -75,24 +91,14 @@ static int replace(lua_State *l)
 		return error_no_dict(l);
 	}
 
-	switch (lua_type(l, 2)) {
-		case LUA_TTABLE:
-		case LUA_TUSERDATA:
+	size_t len;
+	const unsigned char *str = (const unsigned char *) tolstring(l, -2, &len);
 
-			if (!replace_ut_tostring(l, -2))
-				return nil_value(l);
-
-		case LUA_TSTRING:
-		case LUA_TNUMBER: break;
-		default:
-
-			return nil_value(l);
+	if (!str) {
+		return nil_value(l);
 	}
 
-	size_t len;
-	const unsigned char *str = (const unsigned char *) lua_tolstring(l, 2, &len);
-
-	if (!dlen) {
+	if (!len || !dlen) {
 		lua_pop(l, 1); // remove last value (dict)
 		return 1;
 	}
@@ -132,6 +138,10 @@ static int replace(lua_State *l)
 				if (!str_rep[str[i]]) {
 					return error_no_str_in_dict(l, str[i]);
 				}
+
+				if (str_rep_len[str[i]] <= sizeof(unsigned char *)) { // avoid future memcpy if got a short string
+					memcpy(&str_rep[str[i]], str_rep[str[i]], str_rep_len[str[i]] * sizeof(unsigned char));
+				}
 			}
 
 			oversize+= str_rep_len[str[i]];
@@ -146,11 +156,11 @@ static int replace(lua_State *l)
 
 	oversize+= len - matched;
 
-	unsigned char sbuf[LAK_BUF_STACK_SIZE];
+	unsigned char sbuf[LAK_BUF_STACK_TOTALSIZE];
 	unsigned char *new;
 
 	if (oversize > LAK_BUF_STACK_SIZE) {
-		new = (unsigned char *) malloc(oversize);
+		new = (unsigned char *) malloc(oversize * sizeof(unsigned char) + LAK_BUF_OVERSIZE);
 
 		if (!new) {
 			return error_bad_malloc(l);
@@ -163,11 +173,14 @@ static int replace(lua_State *l)
 
 	for (i = 0; i < len; ++i) {
 		if (dict[str[i]]) {
-			if (str_rep_len[str[i]] > 1) {
-				memcpy(new, str_rep[str[i]], str_rep_len[str[i]] * sizeof(unsigned char));
+			if (str_rep_len[str[i]]) {
+				if (str_rep_len[str[i]] > sizeof(unsigned char *)) {
+					memcpy(new, str_rep[str[i]], str_rep_len[str[i]] * sizeof(unsigned char));
+				} else {
+					*((const unsigned char **)new) = str_rep[str[i]]; //lol
+				}
+
 				new+= str_rep_len[str[i]];
-			} else if (str_rep_len[str[i]]) {
-				*(new++) = *str_rep[str[i]];
 			}
 		} else {
 			*(new++) = str[i];
@@ -183,25 +196,23 @@ static int replace(lua_State *l)
 	return 1;
 }
 
-static int make_new(lua_State *l)
+static int new(lua_State *l)
 {
-	if (lua_gettop(l) > 2) {
-		lua_pop(l, lua_gettop(l) - 2);
+	short argc = (short)lua_gettop(l);
+	short i;
+
+	for (i = 1; i <= argc; ++i) {
+		luaL_checktype(l, i, LUA_TTABLE);
 	}
 
 	lua_newtable(l);
-
-	if (!lua_istable(l, 1)) {
-		return error_meta_set(l);
-	}
-
 	lua_getfield(l, 1, "_meta");
 
 	if (!lua_istable(l, -1)) {
 		return error_meta_set(l);
 	}
 
-	lua_setmetatable(l, 3);
+	lua_setmetatable(l, -2);
 
 	unsigned char dict[LAK_DICT_SIZE] = {};
 
@@ -211,10 +222,11 @@ static int make_new(lua_State *l)
 	size_t max_value = 0;
 	size_t lnk;
 
-	if (lua_istable(l, 2)) {
+	for (i = 2; i <= argc; ++i) {
+
 		lua_pushnil(l);
 
-		while(lua_next(l, 2)) {
+		while(lua_next(l, i)) {
 
 			if (lua_isnumber(l, -2)) {
 				keyi = lua_tonumber(l, -2);
@@ -235,34 +247,16 @@ static int make_new(lua_State *l)
 				keyi = key[0];
 			}
 
-			switch (lua_type(l, -1)) {
-				case LUA_TTABLE:
-				case LUA_TUSERDATA:
-					if (!replace_ut_tostring(l, -1)) {
-						lua_pop(l, 1);
-						continue;
-					}
-
-				case LUA_TSTRING:
-				case LUA_TNUMBER:
-					if (!lua_tostring(l, -1)) { // force convert to string
-						lua_pop(l, 1);
-						continue;
-					}
-
-					dict[keyi] = LAK_DSTRING;
-					break;
-
-				case LUA_TFUNCTION:
-					dict[keyi] = LAK_DFUNCTION;
-					break;
-
-				default:
-					lua_pop(l, 1);
-					continue;
+			if (tolstring(l, -1, NULL)) { // force convert to string
+				dict[keyi] = LAK_DSTRING;
+			} else if (lua_type(l, -1) == LUA_TFUNCTION) {
+				dict[keyi] = LAK_DFUNCTION;
+			} else {
+				lua_pop(l, 1);
+				continue;
 			}
 
-			lua_rawseti(l, 3, keyi);
+			lua_rawseti(l, -3, keyi);
 
 			if (max_value <= keyi) {
 				max_value = (size_t) (keyi + 1);
@@ -271,7 +265,7 @@ static int make_new(lua_State *l)
 	}
 
 	lua_pushlstring(l, (const char *) dict, max_value);
-	lua_rawseti(l, 3, -1);
+	lua_rawseti(l, -2, -1);
 
 	return 1;
 }
@@ -280,10 +274,10 @@ int luaopen_odielak(lua_State *l)
 {
 	lua_createtable(l, 0, 3);
 
-	lua_pushcfunction(l, make_new);
+	lua_pushcfunction(l, new);
 	lua_setfield(l, -2, "New");
 
-	lua_pushnumber(l, 101);
+	lua_pushnumber(l, LAK_VERSION);
 	lua_setfield(l, -2, "_VERSION");
 
 	lua_createtable(l, 0, 1);

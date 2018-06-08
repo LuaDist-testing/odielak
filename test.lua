@@ -5,9 +5,6 @@ local sanityt = {
 	['<'] = '&lt;',
 	['>'] = '&gt;',
 	['"'] = '&qout;',
-	['\''] = '&#x27;',
-	['/'] = '&#x2F;',
-	['A'] = '', -- option (replace A with nothing)
 	['H'] = {}, -- ignore
 	[255] = 'last',
 	['U'] = setmetatable({}, {__tostring = function() end}), -- ignore
@@ -16,10 +13,35 @@ local sanityt = {
 	[256] = 'bad key',
 }
 
+local sanity_it2 = {
+	['\''] = '&#x27;',
+	['/'] = '&#x2F;',
+	['A'] = '', -- option (replace A with nothing)
+}
+
+local g_table = {
+	-- sanityt
+	['&'] = '&amp;',
+	['<'] = '&lt;',
+	['>'] = '&gt;',
+	['"'] = '&qout;',
+	['H'] = {}, -- ignore
+	[255] = 'last',
+	['U'] = setmetatable({}, {__tostring = function() end}), -- ignore
+	['B'] = setmetatable({"CC"}, {__tostring = function(self) return self[1]; end}),
+	['F'] = function(self, str, key) print(self, str, key); return '_F_'; end,
+	[256] = 'bad key',
+
+	-- sanity_it2
+	['\''] = '&#x27;',
+	['/'] = '&#x2F;',
+	['A'] = '', -- option (replace A with nothing)
+}
+
 local str = 'abc234;&&&12<*A*>  ///12O"A\'-9 \n\tOL&';
 
 -- lak
-local sanity_it = lak:New(sanityt);
+local sanity_it = lak:New(sanityt, sanity_it2);
 
 local lstr = sanity_it(str);
 local mstr = sanity_it(setmetatable({ str = str }, {__tostring = function(self)
@@ -29,7 +51,7 @@ end}));
 -- gsub
 local sanityr = '[&<>"\'/A]';
 
-local gstr = string.gsub(str, sanityr, sanityt);
+local gstr = string.gsub(str, sanityr, g_table);
 
 if (lstr ~= gstr or mstr ~= gstr) then
 	print("Lstr: >>" .. lstr .. "<<");
